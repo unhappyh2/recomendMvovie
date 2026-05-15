@@ -1,6 +1,6 @@
-# Breeze — 基于 LightGCN + Diffusion 的电影推荐系统
+# Breeze — 基于 LightGCN 的电影推荐系统
 
-融合图神经网络与扩散模型的推荐系统，RecBole 框架实现，Flask Web 交互。
+基于 LightGCN 的电影推荐系统，RecBole 框架实现，Flask Web 交互。DDPM 扩散模块代码已保留，后续可重新接入。
 
 ## 项目结构
 
@@ -10,8 +10,8 @@ recomendMvovie/
 ├── setup.bat / setup.sh           # 一键环境安装（Windows / Linux）
 ├── train.py                       # 训练入口
 ├── models/
-│   ├── diffusion_layers.py        # DDPM 组件（调度器、时间嵌入、去噪MLP）
-│   └── lightgcn_diffusion.py      # 主模型：LightGCN + Diffusion + Predictor
+│   ├── diffusion_layers.py        # 预留 DDPM 组件（调度器、时间嵌入、去噪MLP）
+│   └── lightgcn_diffusion.py      # 主模型：LightGCN + Predictor
 ├── app/
 │   ├── main.py                    # Flask Web 服务（用户端 + 管理端）
 │   ├── templates/                 # 页面模板（11个）
@@ -26,14 +26,13 @@ recomendMvovie/
 ## 模型架构
 
 ```
-交互数据 → 图嵌入层(LightGCN) → 特征增强层(DDPM) → 推荐预测层(Inner Product)
-            3层图卷积、BPR损失      20步扩散、噪声预测       内积评分排序
+交互数据 → 图嵌入层(LightGCN) → 推荐预测层(Inner Product)
+            3层图卷积、BPR损失       内积评分排序
 ```
 
 | 组件 | 说明 | 参数 |
 |------|------|------|
 | LightGCN | 轻量图卷积，学习用户-物品交互特征 | 3层, 64维嵌入 |
-| DDPM | 扩散概率模型，对嵌入加噪再去噪，增强鲁棒性 | 20步扩散 |
 | Predictor | 内积法计算用户-物品匹配度 | — |
 
 ## 环境安装
@@ -96,13 +95,12 @@ recbole_user_id 匹配？  →  使用预训练嵌入  → 完全个性化
 |------|--------|------|
 | embedding_size | 64 | 嵌入维度 |
 | n_layers | 3 | LightGCN 层数 |
-| diffusion_steps | 20 | DDPM 扩散步数 |
-| diffusion_beta_start | 1e-4 | 噪声调度起始值 |
-| diffusion_beta_end | 0.02 | 噪声调度结束值 |
 | epochs | 200 | 训练轮数 |
 | train_batch_size | 2048 | 训练批大小 |
 | learning_rate | 1e-3 | 学习率 |
 | reg_weight | 1e-4 | 正则化系数 |
+
+`diffusion_*` 配置项目前仅作为后续 DDPM 接入预留，当前训练路径未启用。
 
 ## 命令行参数
 

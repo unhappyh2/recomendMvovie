@@ -1,5 +1,5 @@
 """
-训练脚本: LightGCN + Diffusion 模型训练与评估
+训练脚本: LightGCN 模型训练与评估
 基于 RecBole 框架
 """
 import os
@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--no_progress', action='store_true')
     args = parser.parse_args()
 
-    # 使用 BPR 作为配置模型名以兼容 RecBole，实际模型为 LightGCNDiffusion
+    # 使用 BPR 作为配置模型名以兼容 RecBole，实际模型为 LightGCNDiffusion（当前仅启用 LightGCN）
     config = Config(model='BPR', dataset='ml-100k',
                     config_file_list=[args.config])
     if args.epochs:
@@ -50,9 +50,9 @@ def main():
     set_seed(config['seed'])
 
     init_logger(config)
-    logger = config.logger
+    logger = logging.getLogger()
     logger.info('=' * 60)
-    logger.info('LightGCN + Diffusion 推荐模型训练')
+    logger.info('LightGCN 推荐模型训练')
     logger.info('=' * 60)
 
     logger.info(set_color('Loading dataset...', 'green'))
@@ -99,7 +99,7 @@ def main():
             'user_embedding': user_emb.cpu().numpy(),
             'item_embedding': item_emb.cpu().numpy(),
             'model_state': model.state_dict(),
-            'config': dict(config),
+            'config': dict(config.final_config_dict),
             'user_num': model.n_users,
             'item_num': model.n_items,
         }
