@@ -93,12 +93,12 @@ recbole_user_id 匹配？  →  使用预训练嵌入  → 完全个性化
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| embedding_size | 64 | 嵌入维度 |
+| embedding_size | 128 | 嵌入维度 |
 | n_layers | 3 | LightGCN 层数 |
-| epochs | 200 | 训练轮数 |
+| epochs | 100 | 训练轮数 |
 | train_batch_size | 2048 | 训练批大小 |
-| learning_rate | 1e-3 | 学习率 |
-| reg_weight | 1e-4 | 正则化系数 |
+| learning_rate | 1e-4 | 学习率 |
+| reg_weight | 1e-5 | 正则化系数 |
 
 `diffusion_*` 配置项目前仅作为后续 DDPM 接入预留，当前训练路径未启用。
 
