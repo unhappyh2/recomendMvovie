@@ -41,7 +41,7 @@ diffusion_hidden_dims: [256, 128]
 diffusion_lr: 1e-4
 
 # 优化器
-learning_rate: 1e-4
+learning_rate: 1e-3
 
 # 其他
 seed: 42

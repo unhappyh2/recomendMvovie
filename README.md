@@ -98,7 +98,7 @@ recbole_user_id 匹配？  →  使用预训练嵌入  → 完全个性化
 | val_interval.rating | [4,inf) | 仅保留 4 分及以上交互作为正反馈 |
 | epochs | 100 | 训练轮数 |
 | train_batch_size | 2048 | 训练批大小 |
-| learning_rate | 1e-4 | 学习率 |
+| learning_rate | 1e-3 | 学习率 |
 | reg_weight | 1e-5 | 正则化系数 |
 
 `diffusion_*` 配置项目前仅作为后续 DDPM 接入预留，当前训练路径未启用。

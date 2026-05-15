@@ -9,8 +9,8 @@ import numpy as np
 from scipy.sparse import coo_matrix
 
 from recbole.model.abstract_recommender import GeneralRecommender
-from recbole.model.init import xavier_normal_initialization
-from recbole.model.loss import BPRLoss
+from recbole.model.init import xavier_uniform_initialization
+from recbole.model.loss import BPRLoss, EmbLoss
 from recbole.utils import InputType
 
 
@@ -23,16 +23,15 @@ class LightGCNDiffusion(GeneralRecommender):
 
         self.n_users = dataset.user_num
         self.n_items = dataset.item_num
-        self.n_nodes = self.n_users + self.n_items
 
         # LightGCN 参数
         self.n_layers = config['n_layers']
         self.embedding_size = config['embedding_size']
         self.reg_weight = config['reg_weight']
+        self.require_pow = config['require_pow']
 
-        # 嵌入矩阵 [n_users + n_items, embedding_size]
-        self.node_embedding = nn.Embedding(self.n_nodes, self.embedding_size)
-        nn.init.normal_(self.node_embedding.weight, std=0.1)
+        self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
+        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
 
         # 构建归一化邻接矩阵 (仅用训练集)
         self.norm_adj = self._build_norm_adj(dataset)
@@ -40,8 +39,13 @@ class LightGCNDiffusion(GeneralRecommender):
 
         # BPR 损失
         self.bpr_loss = BPRLoss()
+        self.reg_loss = EmbLoss()
 
-        self.apply(xavier_normal_initialization)
+        self.restore_user_e = None
+        self.restore_item_e = None
+
+        self.apply(xavier_uniform_initialization)
+        self.other_parameter_name = ['restore_user_e', 'restore_item_e']
 
     def _build_norm_adj(self, dataset):
         """构建对称归一化邻接矩阵 A_hat = D^{-1/2} A D^{-1/2}"""
@@ -82,7 +86,7 @@ class LightGCNDiffusion(GeneralRecommender):
 
     def get_ego_embeddings(self):
         """获取用户和物品的初始嵌入"""
-        return self.node_embedding.weight
+        return torch.cat([self.user_embedding.weight, self.item_embedding.weight], dim=0)
 
     # ==================== 图嵌入层 (LightGCN) ====================
 
@@ -120,6 +124,9 @@ class LightGCNDiffusion(GeneralRecommender):
 
     def calculate_loss(self, interaction):
         """总损失 = BPR损失 + L2正则"""
+        if self.restore_user_e is not None or self.restore_item_e is not None:
+            self.restore_user_e, self.restore_item_e = None, None
+
         user = interaction[self.USER_ID]
         pos_item = interaction[self.ITEM_ID]
         neg_item = interaction[self.NEG_ITEM_ID]
@@ -135,12 +142,15 @@ class LightGCNDiffusion(GeneralRecommender):
         neg_scores = torch.sum(u_emb * neg_emb, dim=1)
         bpr_loss = self.bpr_loss(pos_scores, neg_scores)
 
-        # L2 正则
-        reg_loss = (1 / 2) * (
-            u_emb.norm(2).pow(2) +
-            pos_emb.norm(2).pow(2) +
-            neg_emb.norm(2).pow(2)
-        ) / float(len(user))
+        u_ego_emb = self.user_embedding(user)
+        pos_ego_emb = self.item_embedding(pos_item)
+        neg_ego_emb = self.item_embedding(neg_item)
+        reg_loss = self.reg_loss(
+            u_ego_emb,
+            pos_ego_emb,
+            neg_ego_emb,
+            require_pow=self.require_pow,
+        )
 
         total_loss = bpr_loss + self.reg_weight * reg_loss
 
@@ -163,9 +173,10 @@ class LightGCNDiffusion(GeneralRecommender):
         """为给定用户预测所有物品的评分（用于评估）"""
         user = interaction[self.USER_ID]
 
-        user_emb, item_emb = self.forward()
+        if self.restore_user_e is None or self.restore_item_e is None:
+            self.restore_user_e, self.restore_item_e = self.forward()
 
-        u_emb = user_emb[user]
-        scores = torch.matmul(u_emb, item_emb.transpose(0, 1))
+        u_emb = self.restore_user_e[user]
+        scores = torch.matmul(u_emb, self.restore_item_e.transpose(0, 1))
 
         return scores.view(-1)
