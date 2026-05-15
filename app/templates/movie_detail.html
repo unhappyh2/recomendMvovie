@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ movie.title }} - Breeze{% endblock %}
+{% block content %}
+
+<div class="movie-detail">
+    <div class="movie-detail-header">
+        <div class="movie-detail-poster poster-drama">🎬</div>
+        <div class="movie-detail-info">
+            <h2>{{ movie.title }}</h2>
+            <div class="movie-detail-meta">
+                <span class="badge badge-genre">{{ movie.genres.replace('|', ' · ') }}</span>
+                {% if avg_rating %}
+                <span class="badge badge-rating">★ {{ "%.1f"|format(avg_rating) }} / 5</span>
+                <span class="badge badge-count">{{ rating_count }}人评分</span>
+                {% endif %}
+                {% if user_rating %}
+                <span class="badge badge-rating">你评: ★ {{ "%.0f"|format(user_rating) }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 评分 -->
+    <div class="rating-section">
+        <h3>为这部电影评分</h3>
+        <form method="POST" action="{{ url_for('rate_movie', movie_id=movie.movie_id) }}" style="display:flex;align-items:center;gap:14px;">
+            <div class="star-rating">
+                {% for s in [5,4,3,2,1] %}
+                <input type="radio" id="star{{ s }}" name="rating" value="{{ s }}" {% if user_rating == s %}checked{% endif %}>
+                <label for="star{{ s }}">★</label>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">提交评分</button>
+        </form>
+    </div>
+
+    <!-- 评论 -->
+    <div class="review-section">
+        <h3>发表评论</h3>
+        <form method="POST" action="{{ url_for('review_movie', movie_id=movie.movie_id) }}" style="margin-bottom:20px;">
+            <div class="form-group">
+                <textarea name="content" placeholder="分享你的观影感受..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-outline btn-sm">发表评论</button>
+        </form>
+
+        <h3>评论 · {{ reviews|length }}</h3>
+        {% if reviews %}
+        {% for r in reviews %}
+        <div class="review-card">
+            <div class="review-header">
+                <div class="review-avatar">{{ r.username[0].upper() }}</div>
+                <span class="review-author">{{ r.username }}</span>
+                <span class="review-time">{{ r.created_at[:16] }}</span>
+            </div>
+            <div class="review-content">{{ r.content }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state" style="padding:24px;">
+            <p>还没有评论，来写第一条吧</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 相似电影 -->
+{% if similar %}
+<div class="section" style="margin-top:32px;">
+    <div class="section-header"><h2>🎯 相似推荐</h2></div>
+    <div class="movie-grid">
+        {% for m in similar %}
+        <div class="movie-card">
+            <a href="{{ url_for('movie_detail', movie_id=m.id) }}">
+                <div class="movie-poster poster-default">
+                    <span class="poster-icon">🎬</span>
+                </div>
+            </a>
+            <div class="movie-info">
+                <div class="title"><a href="{{ url_for('movie_detail', movie_id=m.id) }}">{{ m.title }}</a></div>
+                <div class="genres">{{ m.genres.replace('|', ' · ') }}</div>
+                <div class="meta"><span class="rating">相似度 {{ "%.2f"|format(m.score) }}</span></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}首页 - Breeze{% endblock %}
+{% block content %}
+
+<!-- Hero -->
+<div class="hero">
+    <h2>Hi, {{ session.username }} 👋</h2>
+    <p>{% if source == 'pretrained' %}基于模型训练结果，为你推荐个性化电影{% elif source == 'rated' %}基于你{% if recommendations %}的观影评分，为你精选{% else %}的偏好{% endif %}{% else %}新用户冷启动 · 去评分几部电影，推荐会越来越懂你{% endif %}</p>
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <div class="num">{{ recommendations|length if recommendations else 0 }}</div>
+            <div class="label">为你推荐</div>
+        </div>
+        <div class="hero-stat">
+            <div class="num">{{ popular|length if popular else 0 }}</div>
+            <div class="label">热门佳作</div>
+        </div>
+        <div class="hero-stat">
+            <div class="num">1,682</div>
+            <div class="label">影片库</div>
+        </div>
+    </div>
+</div>
+
+<!-- 推荐 -->
+{% if recommendations %}
+<div class="section">
+    <div class="section-header">
+        <h2>✨ 为你推荐</h2>
+        <a href="{{ url_for('recommendations') }}">查看全部 →</a>
+    </div>
+    <div class="movie-grid">
+        {% for m in recommendations[:12] %}
+        {% set genre_class = 'poster-default' %}
+        {% if 'Action' in m.genres %}{% set genre_class = 'poster-action' %}
+        {% elif 'Comedy' in m.genres %}{% set genre_class = 'poster-comedy' %}
+        {% elif 'Drama' in m.genres %}{% set genre_class = 'poster-drama' %}
+        {% elif 'Sci-Fi' in m.genres or 'Animation' in m.genres %}{% set genre_class = 'poster-scifi' %}
+        {% elif 'Horror' in m.genres %}{% set genre_class = 'poster-horror' %}
+        {% elif 'Romance' in m.genres %}{% set genre_class = 'poster-romance' %}
+        {% elif 'Thriller' in m.genres %}{% set genre_class = 'poster-thriller' %}
+        {% endif %}
+        <div class="movie-card">
+            <a href="{{ url_for('movie_detail', movie_id=m.id) }}">
+                <div class="movie-poster {{ genre_class }}">
+                    <span class="poster-icon">🎬</span>
+                    {% if m.score is defined %}
+                    <span class="poster-score">{{ "%.1f"|format(m.score) }}</span>
+                    {% endif %}
+                </div>
+            </a>
+            <div class="movie-info">
+                <div class="title"><a href="{{ url_for('movie_detail', movie_id=m.id) }}">{{ m.title }}</a></div>
+                <div class="genres">{{ m.genres.replace('|', ' · ') }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 热门 -->
+{% if popular %}
+<div class="section">
+    <div class="section-header">
+        <h2>🔥 热门高分</h2>
+        <a href="{{ url_for('search') }}">发现更多 →</a>
+    </div>
+    <div class="movie-grid">
+        {% for m in popular %}
+        <div class="movie-card">
+            <a href="{{ url_for('movie_detail', movie_id=m.movie_id) }}">
+                <div class="movie-poster poster-drama">
+                    <span class="poster-icon">⭐</span>
+                    <span class="poster-score">{{ "%.1f"|format(m.avg_rating) }}</span>
+                </div>
+            </a>
+            <div class="movie-info">
+                <div class="title"><a href="{{ url_for('movie_detail', movie_id=m.movie_id) }}">{{ m.title }}</a></div>
+                <div class="genres">{{ m.genres.replace('|', ' · ') }}</div>
+                <div class="meta">
+                    <span class="rating">★ {{ "%.1f"|format(m.avg_rating) }}</span>
+                    <span class="count">{{ m.cnt }}评</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if not recommendations and not popular %}
+<div class="empty-state">
+    <div class="icon">🎥</div>
+    <p>还没有推荐数据。去<a href="{{ url_for('search') }}">发现电影</a>并开始评分，让系统了解你的口味吧！</p>
+</div>
+{% endif %}
+
+{% endblock %}

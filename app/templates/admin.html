@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}管理面板 - Breeze{% endblock %}
+{% block content %}
+<div class="section"><h2 style="font-size:1.4rem;font-weight:700;">📊 管理员控制台</h2></div>
+
+<div class="admin-stats">
+    <div class="stat-card"><div class="stat-num">{{ user_count }}</div><div class="stat-label">注册用户</div></div>
+    <div class="stat-card"><div class="stat-num">{{ movie_count }}</div><div class="stat-label">电影总数</div></div>
+    <div class="stat-card"><div class="stat-num">{{ rating_count }}</div><div class="stat-label">评分记录</div></div>
+    <div class="stat-card"><div class="stat-num">{{ review_count }}</div><div class="stat-label">评论数量</div></div>
+</div>
+
+<div class="card">
+    <h2>快捷操作</h2>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <a href="{{ url_for('admin_users') }}" class="btn btn-primary">👥 用户管理</a>
+        <a href="{{ url_for('admin_movies') }}" class="btn btn-primary">🎬 电影管理</a>
+        <a href="{{ url_for('admin_reviews') }}" class="btn btn-primary">💬 评论管理</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>系统信息</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+        <div><span style="color:var(--text-muted);">推荐算法</span><br><strong>LightGCN + Diffusion</strong></div>
+        <div><span style="color:var(--text-muted);">嵌入维度</span><br><strong>64</strong></div>
+        <div><span style="color:var(--text-muted);">图卷积层</span><br><strong>3</strong></div>
+        <div><span style="color:var(--text-muted);">扩散步数</span><br><strong>20</strong></div>
+    </div>
+</div>
+{% endblock %}

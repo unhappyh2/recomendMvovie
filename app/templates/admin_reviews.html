@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}评论管理 - Breeze{% endblock %}
+{% block content %}
+<div class="section"><h2 style="font-size:1.4rem;font-weight:700;">💬 评论管理</h2></div>
+<div class="table-container">
+    <table>
+        <thead><tr><th>ID</th><th>用户</th><th>电影</th><th>内容</th><th>时间</th><th></th></tr></thead>
+        <tbody>
+        {% for r in reviews %}
+        <tr>
+            <td style="color:var(--text-muted)">{{ r.id }}</td>
+            <td><strong>{{ r.username }}</strong></td>
+            <td>{{ r.title }}</td>
+            <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.content }}</td>
+            <td style="color:var(--text-muted);font-size:0.85rem;">{{ r.created_at[:16] }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('admin_delete_review', review_id=r.id) }}" onsubmit="return confirm('确定删除该评论？')">
+                    <button class="btn btn-danger btn-sm">删除</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

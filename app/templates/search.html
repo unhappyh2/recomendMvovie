@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}发现电影 - Breeze{% endblock %}
+{% block content %}
+<div class="section">
+    <div class="section-header"><h2>🔍 发现电影</h2></div>
+    <form class="search-box">
+        <input type="text" name="q" value="{{ query }}" placeholder="搜索电影名称...">
+        <select name="genre">
+            <option value="">全部类型</option>
+            {% for g in all_genres %}
+            <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>{{ g }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">搜索</button>
+    </form>
+</div>
+
+{% if movies %}
+<div class="section">
+    <div class="section-header"><h2>结果 <span style="color:var(--text-muted);font-weight:400;">({{ movies|length }})</span></h2></div>
+    <div class="table-container">
+        <table>
+            <thead><tr><th>ID</th><th>电影名称</th><th>类型</th><th></th></tr></thead>
+            <tbody>
+            {% for m in movies %}
+            <tr>
+                <td style="color:var(--text-muted)">#{{ m.movie_id }}</td>
+                <td><a href="{{ url_for('movie_detail', movie_id=m.movie_id) }}">{{ m.title }}</a></td>
+                <td><span class="badge badge-genre">{{ m.genres.replace('|', ' · ') }}</span></td>
+                <td><a href="{{ url_for('movie_detail', movie_id=m.movie_id) }}" class="btn btn-outline btn-sm">详情</a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% elif query or selected_genre %}
+<div class="empty-state">
+    <div class="icon">🔍</div>
+    <p>没有找到匹配的电影，试试其他关键词</p>
+</div>
+{% endif %}
+{% endblock %}

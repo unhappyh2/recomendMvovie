@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Breeze - 智能电影推荐{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+    <div class="header-inner">
+        <div class="header-left">
+            <a href="{{ url_for('index') }}" class="logo">Breeze</a>
+            <nav class="header-nav">
+                {% if session.user_id %}
+                    {% if session.role == 'admin' %}
+                        <a href="{{ url_for('admin') }}" {% if request.path == url_for('admin') %}class="active"{% endif %}>管理面板</a>
+                        <a href="{{ url_for('admin_users') }}">用户</a>
+                        <a href="{{ url_for('admin_movies') }}">电影</a>
+                        <a href="{{ url_for('admin_reviews') }}">评论</a>
+                    {% else %}
+                        <a href="{{ url_for('index') }}" {% if request.path == url_for('index') %}class="active"{% endif %}>首页</a>
+                        <a href="{{ url_for('recommendations') }}" {% if request.path == url_for('recommendations') %}class="active"{% endif %}>为你推荐</a>
+                        <a href="{{ url_for('search') }}" {% if request.path == url_for('search') %}class="active"{% endif %}>发现</a>
+                    {% endif %}
+                {% endif %}
+            </nav>
+        </div>
+        {% if session.user_id %}
+        <div class="header-right">
+            <div class="user-badge">
+                <div class="avatar">{{ session.username[0].upper() }}</div>
+                <span>{{ session.username }}</span>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn-logout">登出</a>
+        </div>
+        {% endif %}
+    </div>
+</header>
+
+<main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</main>
+
+<footer>
+    <p>Breeze · 基于 LightGCN + Diffusion 图神经网络 · 电影推荐系统</p>
+</footer>
+</body>
+</html>
