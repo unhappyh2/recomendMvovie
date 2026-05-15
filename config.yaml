@@ -11,6 +11,11 @@ load_col:
   user: [user_id, age, gender, occupation]
   item: [item_id, title, genres]
 
+# 只保留高评分交互作为正反馈，避免低分电影进入 LightGCN 交互图
+val_interval:
+  rating: "[4,inf)"
+filter_inter_by_user_or_item: True
+
 # 训练配置
 epochs: 100
 train_batch_size: 2048
@@ -24,7 +29,7 @@ eval_args:
 
 # 模型超参数
 embedding_size: 128
-n_layers: 3
+n_layers: 2
 reg_weight: 1e-5
 
 # 预留 DDPM 扩散模型参数（当前 LightGCN 训练路径未启用）

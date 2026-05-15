@@ -27,12 +27,12 @@ recomendMvovie/
 
 ```
 交互数据 → 图嵌入层(LightGCN) → 推荐预测层(Inner Product)
-            3层图卷积、BPR损失       内积评分排序
+            2层图卷积、BPR损失       内积评分排序
 ```
 
 | 组件 | 说明 | 参数 |
 |------|------|------|
-| LightGCN | 轻量图卷积，学习用户-物品交互特征 | 3层, 64维嵌入 |
+| LightGCN | 轻量图卷积，学习用户-物品交互特征 | 2层, 128维嵌入 |
 | Predictor | 内积法计算用户-物品匹配度 | — |
 
 ## 环境安装
@@ -62,7 +62,7 @@ pip install numpy pandas scipy flask pyyaml
 ### 1. 训练模型
 ```bash
 conda activate recbole
-python train.py --device cuda --epochs 200
+python train.py --device cuda --epochs 100
 ```
 训练完成后嵌入自动保存到 `saved/` 目录。
 
@@ -94,7 +94,8 @@ recbole_user_id 匹配？  →  使用预训练嵌入  → 完全个性化
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | embedding_size | 128 | 嵌入维度 |
-| n_layers | 3 | LightGCN 层数 |
+| n_layers | 2 | LightGCN 层数 |
+| val_interval.rating | [4,inf) | 仅保留 4 分及以上交互作为正反馈 |
 | epochs | 100 | 训练轮数 |
 | train_batch_size | 2048 | 训练批大小 |
 | learning_rate | 1e-4 | 学习率 |

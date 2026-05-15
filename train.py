@@ -66,7 +66,7 @@ def main():
                 f'|Test|={test_data.dataset.inter_num}')
 
     logger.info(set_color('Building model...', 'green'))
-    model = LightGCNDiffusion(config, dataset).to(config['device'])
+    model = LightGCNDiffusion(config, train_data._dataset).to(config['device'])
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f'Parameters: {trainable_params:,} trainable / {total_params:,} total')
