@@ -1,6 +1,6 @@
-# Breeze — 基于 LightGCN 的电影推荐系统
+# Breeze — 基于 DiffuRec 的电影推荐系统
 
-基于 LightGCN 的电影推荐系统，RecBole 框架实现，Flask Web 交互。DDPM 扩散模块代码已保留，后续可重新接入。
+基于 DiffuRec 思路的电影推荐系统，RecBole 框架实现训练与评估，Flask Web 交互保持不变。当前主模型已替换为序列扩散推荐模型，类名保留为 `LightGCNDiffusion` 以兼容原训练入口和 Web 侧 checkpoint 读取。
 
 ## 项目结构
 
@@ -10,8 +10,8 @@ recomendMvovie/
 ├── setup.bat / setup.sh           # 一键环境安装（Windows / Linux）
 ├── train.py                       # 训练入口
 ├── models/
-│   ├── diffusion_layers.py        # 预留 DDPM 组件（调度器、时间嵌入、去噪MLP）
-│   └── lightgcn_diffusion.py      # 主模型：LightGCN + Predictor
+│   ├── diffusion_layers.py        # 历史预留 DDPM 组件
+│   └── lightgcn_diffusion.py      # 主模型：DiffuRec 序列扩散推荐
 ├── app/
 │   ├── main.py                    # Flask Web 服务（用户端 + 管理端）
 │   ├── templates/                 # 页面模板（11个）
@@ -26,14 +26,15 @@ recomendMvovie/
 ## 模型架构
 
 ```
-交互数据 → 图嵌入层(LightGCN) → 推荐预测层(Inner Product)
-            2层图卷积、BPR损失       内积评分排序
+高评分交互 → 用户历史序列 → DiffuRec 扩散去噪 → 物品内积排序
+             按时间截断填充   Transformer 近似器     Recall@K 评估
 ```
 
 | 组件 | 说明 | 参数 |
 |------|------|------|
-| LightGCN | 轻量图卷积，学习用户-物品交互特征 | 2层, 128维嵌入 |
-| Predictor | 内积法计算用户-物品匹配度 | — |
+| Item Embedding | 学习物品向量并作为分类候选空间 | 128维 |
+| DiffuRec Core | 对用户历史序列做扩散采样和去噪表征 | 32步, 4层 Transformer |
+| Predictor | 用户表征与全量物品向量内积排序 | Recall@10/20/50 |
 
 ## 环境安装
 
@@ -94,14 +95,16 @@ recbole_user_id 匹配？  →  使用预训练嵌入  → 完全个性化
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | embedding_size | 128 | 嵌入维度 |
-| n_layers | 2 | LightGCN 层数 |
 | val_interval.rating | [4,inf) | 仅保留 4 分及以上交互作为正反馈 |
 | epochs | 100 | 训练轮数 |
 | train_batch_size | 2048 | 训练批大小 |
 | learning_rate | 1e-3 | 学习率 |
-| reg_weight | 1e-5 | 正则化系数 |
+| diffurec_max_len | 50 | 每个用户最多保留的历史序列长度 |
+| diffurec_num_blocks | 4 | Transformer 去噪层数 |
+| diffusion_steps | 32 | 扩散反采样步数 |
+| diffusion_schedule | trunc_lin | 噪声调度策略 |
 
-`diffusion_*` 配置项目前仅作为后续 DDPM 接入预留，当前训练路径未启用。
+训练脚本仍通过 `Config(model='BPR')` 初始化 RecBole 配置，但实际模型由 `models/lightgcn_diffusion.py` 中的 DiffuRec 实现提供。
 
 ## 命令行参数
 

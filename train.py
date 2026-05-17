@@ -1,5 +1,5 @@
 """
-训练脚本: LightGCN 模型训练与评估
+训练脚本: DiffuRec 推荐模型训练与评估
 基于 RecBole 框架
 """
 import os
@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--no_progress', action='store_true')
     args = parser.parse_args()
 
-    # 使用 BPR 作为配置模型名以兼容 RecBole，实际模型为 LightGCNDiffusion（当前仅启用 LightGCN）
+    # 使用 BPR 作为配置模型名以兼容 RecBole，实际模型在 LightGCNDiffusion 中实现为 DiffuRec。
     config = Config(model='BPR', dataset='ml-100k',
                     config_file_list=[args.config])
     if args.epochs:
@@ -52,7 +52,7 @@ def main():
     init_logger(config)
     logger = logging.getLogger()
     logger.info('=' * 60)
-    logger.info('LightGCN 推荐模型训练')
+    logger.info('DiffuRec 推荐模型训练')
     logger.info('=' * 60)
 
     logger.info(set_color('Loading dataset...', 'green'))
