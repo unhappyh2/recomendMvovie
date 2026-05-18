@@ -1,4 +1,4 @@
-# RecBole Configuration for LightGCN Model
+# RecBole Configuration for DiffuRec Model
 # 数据集配置
 data_path: dataset/
 dataset: ml-100k
@@ -11,7 +11,7 @@ load_col:
   user: [user_id, age, gender, occupation]
   item: [item_id, title, genres]
 
-# 只保留高评分交互作为正反馈，避免低分电影进入 LightGCN 交互图
+# 只保留高评分交互作为正反馈，避免低分电影进入推荐正样本
 val_interval:
   rating: "[4,inf)"
 filter_inter_by_user_or_item: True
@@ -27,16 +27,21 @@ eval_args:
   order: RO
   mode: full
 
-# 模型超参数
+# 通用模型超参数
 embedding_size: 128
-n_layers: 2
-reg_weight: 1e-5
 
-# 预留 DDPM 扩散模型参数（当前 LightGCN 训练路径未启用）
-diffusion_steps: 20
+# DiffuRec 扩散序列模型参数
+diffurec_max_len: 50
+diffurec_num_blocks: 4
+diffurec_attention_heads: 4
+diffurec_dropout: 0.1
+diffurec_emb_dropout: 0.3
+diffurec_lambda_uncertainty: 0.001
+diffurec_rescale_timesteps: True
+diffusion_steps: 32
 diffusion_beta_start: 1e-4
 diffusion_beta_end: 0.02
-diffusion_schedule: linear
+diffusion_schedule: trunc_lin
 diffusion_hidden_dims: [256, 128]
 diffusion_lr: 1e-4
 
