@@ -68,6 +68,7 @@ def build_checkpoint_payload(config, dataset, model, test_metrics):
         'diffurec_emb_dropout': float(config['diffurec_emb_dropout']),
         'diffurec_lambda_uncertainty': float(config['diffurec_lambda_uncertainty']),
         'diffurec_rescale_timesteps': bool(config['diffurec_rescale_timesteps']),
+        'schedule_sampler_name': config['schedule_sampler_name'],
         'diffusion_steps': int(config['diffusion_steps']),
         'diffusion_schedule': config['diffusion_schedule'],
         'device': 'cpu',
