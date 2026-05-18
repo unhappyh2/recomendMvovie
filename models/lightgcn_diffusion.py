@@ -278,7 +278,12 @@ class LightGCNDiffusion(GeneralRecommender):
         self.restore_item_e = None
 
         self.apply(xavier_uniform_initialization)
+        self._reset_padding_embedding()
         self.other_parameter_name = ['restore_user_e', 'restore_item_e', 'user_history']
+
+    def _reset_padding_embedding(self):
+        with torch.no_grad():
+            self.item_embedding.weight[0].fill_(0)
 
     def _build_user_history(self, dataset):
         history = [[] for _ in range(dataset.user_num)]
@@ -347,6 +352,7 @@ class LightGCNDiffusion(GeneralRecommender):
         target_emb = self.item_embedding(pos_items)
         rep_diffu = self.diffusion(seq_emb, target_emb, mask)
         scores = torch.matmul(rep_diffu, self.item_embedding.weight.t())
+        scores[:, 0] = -1e9
         return self.loss_ce(scores, pos_items)
 
     def predict(self, interaction):
@@ -354,7 +360,8 @@ class LightGCNDiffusion(GeneralRecommender):
         items = interaction[self.ITEM_ID]
         user_rep = self._user_representations(users, reverse=True)
         item_rep = self.item_embedding(items)
-        return torch.sum(user_rep * item_rep, dim=1)
+        scores = torch.sum(user_rep * item_rep, dim=1)
+        return scores.masked_fill(items == 0, -1e9)
 
     def full_sort_predict(self, interaction):
         users = interaction[self.USER_ID]
@@ -362,4 +369,5 @@ class LightGCNDiffusion(GeneralRecommender):
             self.restore_user_e, self.restore_item_e = self.forward()
         user_rep = self.restore_user_e[users]
         scores = torch.matmul(user_rep, self.restore_item_e.transpose(0, 1))
+        scores[:, 0] = -1e9
         return scores.view(-1)
