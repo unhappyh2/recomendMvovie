@@ -21,17 +21,19 @@ epochs: 100
 train_batch_size: 2048
 eval_batch_size: 4096
 valid_metric: Recall@10
+MAX_ITEM_LIST_LENGTH: 50
+train_neg_sample_args: ~
+loss_type: CE
 eval_args:
-  split: {'RS': [0.8, 0.1, 0.1]}
+  split: {'LS': 'valid_and_test'}
   group_by: user
-  order: RO
+  order: TO
   mode: full
 
 # 通用模型超参数
 embedding_size: 128
 
 # DiffuRec 扩散序列模型参数
-diffurec_max_len: 50
 diffurec_num_blocks: 4
 diffurec_attention_heads: 4
 diffurec_dropout: 0.1

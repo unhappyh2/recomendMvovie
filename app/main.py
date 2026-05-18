@@ -317,7 +317,7 @@ def get_user_embedding(user_id):
     if recommender_model is None or not sequence:
         return item_embeddings.mean(axis=0), source, len(sequence), sequence
 
-    max_len = int(checkpoint_data['model_config']['diffurec_max_len'])
+    max_len = int(checkpoint_data['model_config']['MAX_ITEM_LIST_LENGTH'])
     sequence = sequence[-max_len:]
     padded = [0] * (max_len - len(sequence)) + sequence
     seq_tensor = torch.LongTensor([padded])

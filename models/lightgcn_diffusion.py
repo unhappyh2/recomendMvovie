@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from recbole.model.abstract_recommender import SequentialRecommender
 from recbole.model.init import xavier_uniform_initialization
 
 
@@ -242,14 +243,23 @@ class DiffuRecCore(nn.Module):
         return self.approximator(seq_emb, x_t, self._scale_timesteps(t), mask)
 
 
-class LightGCNDiffusion(nn.Module):
-    """Sequential DiffuRec model with simple train/inference helpers."""
+class LightGCNDiffusion(SequentialRecommender):
+    """Sequential DiffuRec model compatible with RecBole Trainer."""
 
-    def __init__(self, config, item_num):
-        super().__init__()
-        self.n_items = int(item_num)
+    def __init__(self, config, dataset_or_item_num):
+        if isinstance(dataset_or_item_num, int):
+            nn.Module.__init__(self)
+            self.ITEM_SEQ = config['ITEM_ID_FIELD'] + config['LIST_SUFFIX']
+            self.ITEM_SEQ_LEN = config['ITEM_LIST_LENGTH_FIELD']
+            self.POS_ITEM_ID = config['ITEM_ID_FIELD']
+            self.ITEM_ID = config['ITEM_ID_FIELD']
+            self.device = config['device']
+            self.max_seq_length = int(config['MAX_ITEM_LIST_LENGTH'])
+            self.n_items = int(dataset_or_item_num)
+        else:
+            super().__init__(config, dataset_or_item_num)
         self.embedding_size = int(config['embedding_size'])
-        self.max_len = int(config['diffurec_max_len'])
+        self.max_len = int(config['MAX_ITEM_LIST_LENGTH'])
 
         self.item_embedding = nn.Embedding(self.n_items, self.embedding_size, padding_idx=0)
         self.embed_dropout = nn.Dropout(float(config['diffurec_emb_dropout']))
@@ -283,26 +293,37 @@ class LightGCNDiffusion(nn.Module):
         seq_emb = self.layer_norm(seq_emb)
         return seq_emb, mask
 
-    def calculate_loss(self, sequences, pos_items):
-        seq_emb, mask = self._encode_sequence(sequences, train_mode=True)
+    def forward(self, item_seq, item_seq_len, train_mode=False):
+        seq_emb, mask = self._encode_sequence(item_seq, train_mode=train_mode)
+        return self.diffusion.reverse_sample(seq_emb, mask)
+
+    def user_representation(self, sequences):
+        seq_lengths = (sequences > 0).sum(dim=1)
+        return self.forward(sequences, seq_lengths, train_mode=False)
+
+    def calculate_loss(self, interaction):
+        item_seq = interaction[self.ITEM_SEQ]
+        pos_items = interaction[self.POS_ITEM_ID]
+        seq_emb, mask = self._encode_sequence(item_seq, train_mode=True)
         target_emb = self.item_embedding(pos_items)
         rep_diffu = self.diffusion(seq_emb, target_emb, mask)
         scores = torch.matmul(rep_diffu, self.item_embedding.weight.t())
         scores[:, 0] = -1e9
         return self.loss_ce(scores, pos_items)
 
-    def user_representation(self, sequences):
-        seq_emb, mask = self._encode_sequence(sequences, train_mode=False)
-        return self.diffusion.reverse_sample(seq_emb, mask)
-
-    def full_sort_predict(self, sequences):
-        user_rep = self.user_representation(sequences)
+    def full_sort_predict(self, interaction):
+        item_seq = interaction[self.ITEM_SEQ]
+        item_seq_len = interaction[self.ITEM_SEQ_LEN]
+        user_rep = self.forward(item_seq, item_seq_len, train_mode=False)
         scores = torch.matmul(user_rep, self.item_embedding.weight.transpose(0, 1))
         scores[:, 0] = -1e9
         return scores
 
-    def predict(self, sequences, items):
-        user_rep = self.user_representation(sequences)
+    def predict(self, interaction):
+        item_seq = interaction[self.ITEM_SEQ]
+        item_seq_len = interaction[self.ITEM_SEQ_LEN]
+        items = interaction[self.ITEM_ID]
+        user_rep = self.forward(item_seq, item_seq_len, train_mode=False)
         item_rep = self.item_embedding(items)
         scores = torch.sum(user_rep * item_rep, dim=1)
         return scores.masked_fill(items == 0, -1e9)

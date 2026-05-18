@@ -97,12 +97,12 @@ python app/main.py
 | epochs | 100 | 训练轮数 |
 | train_batch_size | 2048 | 训练批大小 |
 | learning_rate | 1e-3 | 学习率 |
-| diffurec_max_len | 50 | 每个用户最多保留的历史序列长度 |
+| MAX_ITEM_LIST_LENGTH | 50 | 每个用户最多保留的历史序列长度 |
 | diffurec_num_blocks | 4 | Transformer 去噪层数 |
 | diffusion_steps | 32 | 扩散反采样步数 |
 | diffusion_schedule | trunc_lin | 噪声调度策略 |
 
-训练脚本仍通过 `Config(model='BPR')` 初始化 RecBole 配置，但只复用其数据读取与 id 映射；训练、验证、测试和线上推理由 `models/lightgcn_diffusion.py` 中的顺序 DiffuRec 实现负责。
+训练脚本通过 `Config(model='SASRec')` 触发 RecBole 的顺序数据集与原生 `Trainer` 流程，但实际训练的模型实现来自 `models/lightgcn_diffusion.py` 中的 DiffuRec。
 
 ## 命令行参数
 
