@@ -6,11 +6,15 @@ import sys
 import sqlite3
 import hashlib
 import pickle
+import re
 import numpy as np
 import pandas as pd
+import torch
 from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, g
+
+from models.lightgcn_diffusion import LightGCNDiffusion
 
 app = Flask(__name__)
 app.secret_key = 'recommend-movie-secret-key-2024'
@@ -20,11 +24,14 @@ app.config['DATABASE'] = os.path.join(os.path.dirname(__file__), 'movie_app.db')
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'saved')
 
 # 全局变量加载模型
-user_embeddings = None
+recommender_model = None
 item_embeddings = None
-item_id_map = {}      # recbole_id -> movie_id
+checkpoint_data = None
+item_id_map = {}      # internal_item_id -> movie_id
 movie_info = {}       # movie_id -> {title, genres, ...}
-user_id_map = {}      # recbole_id -> user_id
+user_id_map = {}      # internal_user_id -> user_id
+raw_item_to_internal = {}
+base_user_sequences = {}
 
 
 def get_db():
@@ -100,23 +107,54 @@ def init_db():
 
 
 def load_model():
-    """加载训练好的模型嵌入和元数据"""
-    global user_embeddings, item_embeddings, item_id_map, movie_info, user_id_map
+    """加载训练好的 DiffuRec checkpoint 和推理依赖"""
+    global recommender_model, item_embeddings, checkpoint_data
+    global item_id_map, user_id_map, raw_item_to_internal, base_user_sequences
     try:
-        user_path = os.path.join(MODEL_DIR, 'user_emb.npy')
-        item_path = os.path.join(MODEL_DIR, 'item_emb.npy')
-        if not os.path.exists(user_path) or not os.path.exists(item_path):
-            # 使用随机嵌入作为占位
-            user_embeddings = np.random.randn(944, 64).astype(np.float32)
-            item_embeddings = np.random.randn(1683, 64).astype(np.float32)
-        else:
-            user_embeddings = np.load(user_path)
-            item_embeddings = np.load(item_path)
-        print(f'Model loaded: users={user_embeddings.shape}, items={item_embeddings.shape}')
+        checkpoint_path = os.path.join(MODEL_DIR, 'model_checkpoint.pt')
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(checkpoint_path)
+
+        checkpoint_data = torch.load(checkpoint_path, map_location='cpu')
+        recommender_model = LightGCNDiffusion(
+            checkpoint_data['model_config'],
+            checkpoint_data['item_num'],
+        )
+        recommender_model.load_state_dict(checkpoint_data['model_state'])
+        recommender_model.eval()
+
+        item_embeddings = recommender_model.export_item_embeddings().cpu().numpy()
+        item_id_map = {
+            int(idx): int(raw_id)
+            for idx, raw_id in enumerate(checkpoint_data.get('item_internal_to_raw', []))
+            if raw_id
+        }
+        user_id_map = {
+            int(idx): int(raw_id)
+            for idx, raw_id in enumerate(checkpoint_data.get('user_internal_to_raw', []))
+            if raw_id
+        }
+        raw_item_to_internal = {
+            int(raw_id): int(internal_id)
+            for raw_id, internal_id in checkpoint_data.get('raw_item_to_internal', {}).items()
+        }
+        base_user_sequences = {
+            int(raw_user_id): [int(item_id) for item_id in sequence]
+            for raw_user_id, sequence in checkpoint_data.get('user_sequences', {}).items()
+        }
+        print(
+            f'Model loaded: items={item_embeddings.shape}, '
+            f'users_with_history={len(base_user_sequences)}'
+        )
     except Exception as e:
-        print(f'Model load failed, using random embeddings: {e}')
-        user_embeddings = np.random.randn(944, 64).astype(np.float32)
-        item_embeddings = np.random.randn(1683, 64).astype(np.float32)
+        print(f'Model load failed: {e}')
+        recommender_model = None
+        checkpoint_data = None
+        item_embeddings = np.random.randn(1683, 128).astype(np.float32)
+        item_id_map = {}
+        user_id_map = {}
+        raw_item_to_internal = {}
+        base_user_sequences = {}
 
 
 def load_movie_data():
@@ -146,7 +184,6 @@ def load_movie_data():
                         title = parts[1]
                         genres = parts[3] if len(parts) > 3 else 'Unknown'
                         movie_info[mid] = {'title': title, 'genres': genres}
-                        item_id_map[idx] = mid
                     except:
                         pass
 
@@ -160,7 +197,8 @@ def load_movie_data():
                 if parts:
                     try:
                         uid = int(parts[0])
-                        user_id_map[idx] = uid
+                        if idx not in user_id_map:
+                            user_id_map[idx] = uid
                     except:
                         pass
 
@@ -168,7 +206,6 @@ def load_movie_data():
     except Exception as e:
         print(f'Failed to load movie data: {e}')
         for i in range(1682):
-            item_id_map[i] = i + 1
             movie_info[i + 1] = {'title': f'Movie {i + 1}', 'genres': 'Unknown'}
 
 
@@ -222,54 +259,71 @@ def _reverse_user_map():
     return {v: k for k, v in user_id_map.items()}
 
 
+def _dataset_user_id_from_username(username):
+    match = re.fullmatch(r'user_(\d+)', username or '')
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _fetch_local_positive_items(user_id):
+    db = get_db()
+    rows = db.execute(
+        'SELECT movie_id, rating FROM ratings WHERE user_id = ? ORDER BY created_at ASC, id ASC',
+        (user_id,),
+    ).fetchall()
+    positives = []
+    for row in rows:
+        if float(row['rating']) < 4.0:
+            continue
+        internal_id = raw_item_to_internal.get(int(row['movie_id']))
+        if internal_id is not None:
+            positives.append(internal_id)
+    return positives
+
+
+def _build_inference_sequence(user_id):
+    db = get_db()
+    row = db.execute(
+        'SELECT username FROM users WHERE id = ?',
+        (user_id,),
+    ).fetchone()
+    if row is None:
+        return [], 'cold'
+
+    raw_dataset_user_id = _dataset_user_id_from_username(row['username'])
+    base_sequence = list(base_user_sequences.get(raw_dataset_user_id, []))
+    local_sequence = _fetch_local_positive_items(user_id)
+
+    if base_sequence and local_sequence:
+        source = 'rated'
+    elif base_sequence:
+        source = 'pretrained'
+    elif local_sequence:
+        source = 'rated'
+    else:
+        source = 'cold'
+
+    return base_sequence + local_sequence, source
+
+
 def get_user_embedding(user_id):
-    """获取用户个性化嵌入向量
-    优先级:
-      1. user 有 recbole_user_id → 直接用训练好的嵌入
-      2. user 有评分记录 → 加权合成嵌入
-      3. 新用户 → 全局平均嵌入（冷启动）
-    返回: (embedding, source, rating_count)
-    """
-    global user_embeddings, item_embeddings
-    if user_embeddings is None:
+    """根据用户序列实时生成表示向量。"""
+    global recommender_model, item_embeddings
+    if recommender_model is None:
         load_model()
 
-    # 1. 检查是否是数据集内用户
-    try:
-        db = get_db()
-        row = db.execute(
-            'SELECT recbole_user_id FROM users WHERE id = ?', (user_id,)
-        ).fetchone()
-        if row and row['recbole_user_id'] is not None:
-            rid = row['recbole_user_id']
-            if rid < len(user_embeddings):
-                return user_embeddings[rid], 'pretrained', 0
-    except:
-        pass
+    sequence, source = _build_inference_sequence(user_id)
+    if recommender_model is None or not sequence:
+        return item_embeddings.mean(axis=0), source, len(sequence), sequence
 
-    # 2. 根据评分记录加权合成
-    try:
-        db = get_db()
-        ratings = db.execute(
-            'SELECT movie_id, rating FROM ratings WHERE user_id = ?', (user_id,)
-        ).fetchall()
-        if ratings:
-            rmap = _reverse_item_map()
-            weighted_emb = np.zeros(user_embeddings.shape[1], dtype=np.float32)
-            total_weight = 0.0
-            for r in ratings:
-                rid = rmap.get(r['movie_id'])
-                if rid is not None and rid < len(item_embeddings):
-                    w = float(r['rating']) - 2.5
-                    weighted_emb += w * item_embeddings[rid]
-                    total_weight += abs(w)
-            if total_weight > 1e-8:
-                return weighted_emb / total_weight, 'rated', len(ratings)
-    except:
-        pass
-
-    # 3. 冷启动
-    return user_embeddings.mean(axis=0), 'cold', 0
+    max_len = int(checkpoint_data['model_config']['diffurec_max_len'])
+    sequence = sequence[-max_len:]
+    padded = [0] * (max_len - len(sequence)) + sequence
+    seq_tensor = torch.LongTensor([padded])
+    with torch.no_grad():
+        user_rep = recommender_model.user_representation(seq_tensor).cpu().numpy()[0]
+    return user_rep, source, len(sequence), sequence
 
 
 def get_recommendations(user_id=None, top_k=20):
@@ -277,41 +331,29 @@ def get_recommendations(user_id=None, top_k=20):
     返回: (recommendations, embedding_source)
       - embedding_source: 'rated' (评分个性化) / 'cold' (冷启动)
     """
-    global user_embeddings, item_embeddings
+    global item_embeddings
 
-    if user_embeddings is None or item_embeddings is None:
+    if item_embeddings is None:
         load_model()
 
-    u_emb, source, rating_count = get_user_embedding(user_id)
+    u_emb, source, _rating_count, sequence = get_user_embedding(user_id)
 
-    # 计算评分
     scores = np.dot(item_embeddings, u_emb)
 
-    # 排除已评分电影
-    exclude_ids = set()
-    if user_id:
-        try:
-            db = get_db()
-            rated = db.execute(
-                'SELECT movie_id FROM ratings WHERE user_id = ?', (user_id,)
-            ).fetchall()
-            rmap = _reverse_item_map()
-            for r in rated:
-                rid = rmap.get(r['movie_id'])
-                if rid is not None:
-                    exclude_ids.add(rid)
-        except:
-            pass
+    exclude_ids = set(sequence)
+    scores[0] = -1e9
 
-    # 获取 top-K
     sorted_indices = np.argsort(scores)[::-1]
     recommendations = []
     for idx in sorted_indices:
         if len(recommendations) >= top_k:
             break
-        if idx in exclude_ids:
+        idx = int(idx)
+        if idx == 0 or idx in exclude_ids:
             continue
-        mid = item_id_map.get(idx, idx + 1)
+        mid = item_id_map.get(idx)
+        if mid is None:
+            continue
         info = movie_info.get(mid, {'title': f'Movie {mid}', 'genres': 'Unknown'})
         recommendations.append({
             'id': mid,
@@ -329,22 +371,25 @@ def get_similar_movies(movie_id, top_k=10):
         load_model()
 
     # 找到电影的 recbole 索引
-    reverse_item_map = {v: k for k, v in item_id_map.items()}
-    idx = reverse_item_map.get(movie_id)
+    idx = raw_item_to_internal.get(movie_id)
     if idx is None or idx >= len(item_embeddings):
         return []
 
     m_emb = item_embeddings[idx]
     scores = np.dot(item_embeddings, m_emb)
+    scores[0] = -1e9
     sorted_indices = np.argsort(scores)[::-1]
 
     similar = []
     for i in sorted_indices:
         if len(similar) >= top_k + 1:
             break
+        i = int(i)
         if i == idx:
             continue
-        rid = item_id_map.get(i, i + 1)
+        rid = item_id_map.get(i)
+        if rid is None:
+            continue
         if rid == movie_id:
             continue
         info = movie_info.get(rid, {'title': f'Movie {rid}', 'genres': 'Unknown'})

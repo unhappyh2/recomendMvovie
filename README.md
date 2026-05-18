@@ -18,9 +18,7 @@ recomendMvovie/
 │   └── static/style.css           # 样式
 ├── utils/metrics.py               # 评估指标
 └── saved/                         # 训练后模型输出
-    ├── user_emb.npy               # 用户嵌入 (944, 64)
-    ├── item_emb.npy               # 物品嵌入 (1683, 64)
-    └── model_checkpoint.pt        # 完整 checkpoint
+    └── model_checkpoint.pt        # 模型参数、id映射、基础用户序列
 ```
 
 ## 模型架构
@@ -65,7 +63,7 @@ pip install numpy pandas scipy flask pyyaml
 conda activate recbole
 python train.py --device cuda --epochs 100
 ```
-训练完成后嵌入自动保存到 `saved/` 目录。
+训练完成后会将模型参数、物品映射和基础用户历史统一保存到 `saved/model_checkpoint.pt`。
 
 ### 2. 启动 Web 服务
 ```bash
@@ -83,11 +81,11 @@ python app/main.py
 ## 推荐策略
 
 ```
-recbole_user_id 匹配？  →  使用预训练嵌入  → 完全个性化
-        ↓ 否
-    有评分记录？  →  加权合成嵌入  → 你的口味
-        ↓ 否
-    冷启动  →  全局平均嵌入  → 积累评分后变个性
+用户名映射到 MovieLens 用户？  →  读取基础历史序列  →  DiffuRec 在线推理
+            ↓ 否
+      有正反馈评分？         →  本地评分序列      →  DiffuRec 在线推理
+            ↓ 否
+           冷启动            →  物品均值向量兜底   →  热门/相似内容探索
 ```
 
 ## 配置说明 (`config.yaml`)
@@ -104,7 +102,7 @@ recbole_user_id 匹配？  →  使用预训练嵌入  → 完全个性化
 | diffusion_steps | 32 | 扩散反采样步数 |
 | diffusion_schedule | trunc_lin | 噪声调度策略 |
 
-训练脚本仍通过 `Config(model='BPR')` 初始化 RecBole 配置，但实际模型由 `models/lightgcn_diffusion.py` 中的 DiffuRec 实现提供。
+训练脚本仍通过 `Config(model='BPR')` 初始化 RecBole 配置，但只复用其数据读取与 id 映射；训练、验证、测试和线上推理由 `models/lightgcn_diffusion.py` 中的顺序 DiffuRec 实现负责。
 
 ## 命令行参数
 
