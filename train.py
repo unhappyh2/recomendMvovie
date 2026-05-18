@@ -90,7 +90,15 @@ def build_dataloaders(config, dataset):
         shuffle=False,
     )
 
-    return train_sequences, val_answers, filtered_test_answers, train_loader, val_loader, test_loader
+    return (
+        user_sequences,
+        train_sequences,
+        val_answers,
+        filtered_test_answers,
+        train_loader,
+        val_loader,
+        test_loader,
+    )
 
 
 def recall_ndcg(scores, labels, ks):
@@ -169,15 +177,15 @@ def train_one_epoch(model, train_loader, optimizer, device):
     return total_loss / max(sample_count, 1)
 
 
-def build_checkpoint_payload(config, dataset, model, train_sequences, test_metrics):
+def build_checkpoint_payload(config, dataset, model, user_sequences, test_metrics):
     mappings = build_raw_id_mappings(
         dataset,
         config['USER_ID_FIELD'],
         config['ITEM_ID_FIELD'],
     )
-    raw_train_sequences = {
+    raw_user_sequences = {
         mappings['user_internal_to_raw'][user_id]: sequence
-        for user_id, sequence in train_sequences.items()
+        for user_id, sequence in user_sequences.items()
         if user_id < len(mappings['user_internal_to_raw'])
         and mappings['user_internal_to_raw'][user_id] != 0
     }
@@ -201,7 +209,7 @@ def build_checkpoint_payload(config, dataset, model, train_sequences, test_metri
         'dataset_name': config['dataset'],
         'item_num': model.n_items,
         'item_embeddings': model.export_item_embeddings().cpu(),
-        'user_sequences': raw_train_sequences,
+        'user_sequences': raw_user_sequences,
         'raw_user_to_internal': mappings['raw_user_to_internal'],
         'raw_item_to_internal': mappings['raw_item_to_internal'],
         'user_internal_to_raw': mappings['user_internal_to_raw'],
@@ -235,6 +243,7 @@ def main():
     logger.info(f'Filtered interactions: {dataset.inter_num}')
 
     (
+        user_sequences,
         train_sequences,
         val_answers,
         test_answers,
@@ -290,7 +299,7 @@ def main():
         config,
         dataset,
         model,
-        train_sequences,
+        user_sequences,
         test_result,
     )
     torch.save(checkpoint, save_path)

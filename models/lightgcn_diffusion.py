@@ -166,9 +166,9 @@ class DiffuRecApproximator(nn.Module):
         for block in self.blocks:
             hidden = block(hidden, mask)
         hidden = self.norm(self.dropout(hidden))
-
-        lengths = mask.long().sum(dim=1).clamp(min=1) - 1
-        return hidden[torch.arange(hidden.size(0), device=hidden.device), lengths]
+        # Sequences are left padded, so the last valid item is always at the
+        # right edge after truncation/padding.
+        return hidden[:, -1, :]
 
 
 class DiffuRecCore(nn.Module):
