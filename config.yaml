@@ -35,7 +35,7 @@ eval_args:
   mode: full
 
 # 通用模型超参数
-embedding_size: 128
+embedding_size: 64
 
 # DiffuRec 扩散序列模型参数
 diffurec_num_blocks: 4
