@@ -1,4 +1,4 @@
-# RecBole Configuration for DiffuRec Model
+# RecBole Configuration for SASRec Model
 # 数据集配置
 data_path: dataset/
 dataset: ml-100k
@@ -34,19 +34,16 @@ eval_args:
   order: TO
   mode: full
 
-# 通用模型超参数
-embedding_size: 64
-
-# DiffuRec 扩散序列模型参数
-diffurec_num_blocks: 4
-diffurec_attention_heads: 4
-diffurec_dropout: 0.1
-diffurec_emb_dropout: 0.3
-diffurec_lambda_uncertainty: 0.001
-diffurec_rescale_timesteps: True
-schedule_sampler_name: lossaware
-diffusion_steps: 16
-diffusion_schedule: trunc_lin
+# SASRec 模型参数
+n_layers: 2
+n_heads: 2
+hidden_size: 64
+inner_size: 256
+hidden_dropout_prob: 0.2
+attn_dropout_prob: 0.2
+hidden_act: gelu
+layer_norm_eps: 1e-12
+initializer_range: 0.02
 
 # 优化器
 learning_rate: 1e-3

@@ -14,7 +14,7 @@ from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, g
 
-from models.lightgcn_diffusion import LightGCNDiffusion
+from recbole.model.sequential_recommender.sasrec import SASRec
 
 app = Flask(__name__)
 app.secret_key = 'recommend-movie-secret-key-2024'
@@ -32,6 +32,14 @@ movie_info = {}       # movie_id -> {title, genres, ...}
 user_id_map = {}      # internal_user_id -> user_id
 raw_item_to_internal = {}
 base_user_sequences = {}
+
+
+class _SASRecDatasetStub:
+    def __init__(self, item_num):
+        self.item_num = item_num
+
+    def num(self, field):
+        return self.item_num
 
 
 def get_db():
@@ -107,7 +115,7 @@ def init_db():
 
 
 def load_model():
-    """加载训练好的 DiffuRec checkpoint 和推理依赖"""
+    """加载训练好的 SASRec checkpoint 和推理依赖"""
     global recommender_model, item_embeddings, checkpoint_data
     global item_id_map, user_id_map, raw_item_to_internal, base_user_sequences
     try:
@@ -116,14 +124,15 @@ def load_model():
             raise FileNotFoundError(checkpoint_path)
 
         checkpoint_data = torch.load(checkpoint_path, map_location='cpu')
-        recommender_model = LightGCNDiffusion(
+        checkpoint_data['model_config'].setdefault('NEG_PREFIX', 'neg_')
+        recommender_model = SASRec(
             checkpoint_data['model_config'],
-            checkpoint_data['item_num'],
+            _SASRecDatasetStub(checkpoint_data['item_num']),
         )
         recommender_model.load_state_dict(checkpoint_data['model_state'])
         recommender_model.eval()
 
-        item_embeddings = recommender_model.export_item_embeddings().cpu().numpy()
+        item_embeddings = recommender_model.item_embedding.weight.detach().cpu().numpy()
         item_id_map = {
             int(idx): int(raw_id)
             for idx, raw_id in enumerate(checkpoint_data.get('item_internal_to_raw', []))
@@ -150,7 +159,8 @@ def load_model():
         print(f'Model load failed: {e}')
         recommender_model = None
         checkpoint_data = None
-        item_embeddings = np.random.randn(1683, 128).astype(np.float32)
+        hidden_size = 64
+        item_embeddings = np.random.randn(1683, hidden_size).astype(np.float32)
         item_id_map = {}
         user_id_map = {}
         raw_item_to_internal = {}
@@ -319,10 +329,11 @@ def get_user_embedding(user_id):
 
     max_len = int(checkpoint_data['model_config']['MAX_ITEM_LIST_LENGTH'])
     sequence = sequence[-max_len:]
-    padded = [0] * (max_len - len(sequence)) + sequence
+    padded = sequence + [0] * (max_len - len(sequence))
     seq_tensor = torch.LongTensor([padded])
+    seq_len = torch.LongTensor([len(sequence)])
     with torch.no_grad():
-        user_rep = recommender_model.user_representation(seq_tensor).cpu().numpy()[0]
+        user_rep = recommender_model.forward(seq_tensor, seq_len).cpu().numpy()[0]
     return user_rep, source, len(sequence), sequence
 
 

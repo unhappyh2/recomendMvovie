@@ -1,5 +1,5 @@
 """
-训练脚本: RecBole 原生 Trainer 驱动的 DiffuRec 训练与评估
+训练脚本: RecBole 原生 Trainer 驱动的 SASRec 训练与评估
 """
 import argparse
 import logging
@@ -11,11 +11,11 @@ import torch
 
 from recbole.config import Config
 from recbole.data import create_dataset, data_preparation
+from recbole.model.sequential_recommender.sasrec import SASRec
 from recbole.trainer import Trainer
 from recbole.utils import ensure_dir, init_logger, set_color
 
 from data.sequence_data import build_raw_id_mappings, build_user_sequences
-from models.lightgcn_diffusion import LightGCNDiffusion
 
 
 def set_seed(seed):
@@ -61,16 +61,17 @@ def build_checkpoint_payload(config, dataset, model, test_metrics):
         'LIST_SUFFIX': config['LIST_SUFFIX'],
         'ITEM_LIST_LENGTH_FIELD': config['ITEM_LIST_LENGTH_FIELD'],
         'MAX_ITEM_LIST_LENGTH': int(config['MAX_ITEM_LIST_LENGTH']),
-        'embedding_size': int(config['embedding_size']),
-        'diffurec_num_blocks': int(config['diffurec_num_blocks']),
-        'diffurec_attention_heads': int(config['diffurec_attention_heads']),
-        'diffurec_dropout': float(config['diffurec_dropout']),
-        'diffurec_emb_dropout': float(config['diffurec_emb_dropout']),
-        'diffurec_lambda_uncertainty': float(config['diffurec_lambda_uncertainty']),
-        'diffurec_rescale_timesteps': bool(config['diffurec_rescale_timesteps']),
-        'schedule_sampler_name': config['schedule_sampler_name'],
-        'diffusion_steps': int(config['diffusion_steps']),
-        'diffusion_schedule': config['diffusion_schedule'],
+        'NEG_PREFIX': config['NEG_PREFIX'],
+        'n_layers': int(config['n_layers']),
+        'n_heads': int(config['n_heads']),
+        'hidden_size': int(config['hidden_size']),
+        'inner_size': int(config['inner_size']),
+        'hidden_dropout_prob': float(config['hidden_dropout_prob']),
+        'attn_dropout_prob': float(config['attn_dropout_prob']),
+        'hidden_act': config['hidden_act'],
+        'layer_norm_eps': float(config['layer_norm_eps']),
+        'initializer_range': float(config['initializer_range']),
+        'loss_type': config['loss_type'],
         'device': 'cpu',
     }
 
@@ -79,7 +80,7 @@ def build_checkpoint_payload(config, dataset, model, test_metrics):
         'model_config': model_config,
         'dataset_name': config['dataset'],
         'item_num': model.n_items,
-        'item_embeddings': model.export_item_embeddings().cpu(),
+        'item_embeddings': model.item_embedding.weight.detach().cpu(),
         'user_sequences': raw_user_sequences,
         'raw_user_to_internal': mappings['raw_user_to_internal'],
         'raw_item_to_internal': mappings['raw_item_to_internal'],
@@ -105,7 +106,7 @@ def main():
     init_logger(config)
     logger = logging.getLogger()
     logger.info('=' * 60)
-    logger.info('RecBole Trainer DiffuRec 推荐模型训练')
+    logger.info('RecBole Trainer SASRec 推荐模型训练')
     logger.info('=' * 60)
 
     logger.info(set_color('Loading dataset...', 'green'))
@@ -121,7 +122,7 @@ def main():
     )
 
     logger.info(set_color('Building model...', 'green'))
-    model = LightGCNDiffusion(config, train_data.dataset).to(config['device'])
+    model = SASRec(config, train_data.dataset).to(config['device'])
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f'Parameters: {trainable_params:,} trainable / {total_params:,} total')
