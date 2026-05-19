@@ -17,10 +17,10 @@ val_interval:
 filter_inter_by_user_or_item: True
 
 # 训练配置
-epochs: 500
+epochs: 200
 train_batch_size: 512
-eval_batch_size: 512
-eval_step: 20
+eval_batch_size: 1024
+eval_step: 50
 stopping_step: 5
 valid_metric: Recall@10
 MAX_ITEM_LIST_LENGTH: 50
@@ -45,7 +45,7 @@ diffurec_emb_dropout: 0.3
 diffurec_lambda_uncertainty: 0.001
 diffurec_rescale_timesteps: True
 schedule_sampler_name: lossaware
-diffusion_steps: 32
+diffusion_steps: 16
 diffusion_schedule: trunc_lin
 
 # 优化器
@@ -54,7 +54,7 @@ learning_rate: 1e-3
 # 其他
 seed: 1997
 device: cpu
-topk: [5, 10, 20]
+topk: [10]
 show_progress: True
 
 # 保存路径
