@@ -10,9 +10,7 @@ load_col:
   user: [user_id, age, gender, occupation]
   item: [item_id, title, genres]
 
-# keep only positive feedback interactions
-val_interval:
-  rating: "[4,inf)"
+# official DiffuRec does not rely on an extra high-rating filter here
 filter_inter_by_user_or_item: True
 
 # sequence setting
@@ -21,7 +19,7 @@ train_neg_sample_args: ~
 loss_type: CE
 
 # training
-epochs: 200
+epochs: 500
 train_batch_size: 512
 eval_batch_size: 512
 eval_interval: 20
@@ -46,6 +44,6 @@ rescale_timesteps: True
 
 # misc
 seed: 1997
-device: cpu
+device: cuda
 topk: [5, 10, 20]
 checkpoint_dir: saved/
