@@ -1,5 +1,4 @@
-# RecBole Configuration for SASRec Model
-# 数据集配置
+# RecBole-loaded dataset configuration for DiffuRec reproduction
 data_path: dataset/
 dataset: ml-100k
 USER_ID_FIELD: user_id
@@ -11,48 +10,42 @@ load_col:
   user: [user_id, age, gender, occupation]
   item: [item_id, title, genres]
 
-# 只保留高评分交互作为正反馈，避免低分电影进入推荐正样本
+# keep only positive feedback interactions
 val_interval:
   rating: "[4,inf)"
 filter_inter_by_user_or_item: True
 
-# 训练配置
-epochs: 200
-train_batch_size: 512
-eval_batch_size: 1024
-eval_step: 50
-stopping_step: 5
-valid_metric: Recall@10
+# sequence setting
 MAX_ITEM_LIST_LENGTH: 50
 train_neg_sample_args: ~
 loss_type: CE
-learner: adam
+
+# training
+epochs: 200
+train_batch_size: 512
+eval_batch_size: 512
+eval_interval: 20
+patience: 5
+valid_metric: Recall@10
+learning_rate: 0.001
 weight_decay: 0.0
-eval_args:
-  split: {'LS': 'valid_and_test'}
-  group_by: user
-  order: TO
-  mode: full
+decay_step: 100
+gamma: 0.1
 
-# SASRec 模型参数
-n_layers: 2
-n_heads: 2
-hidden_size: 64
-inner_size: 256
-hidden_dropout_prob: 0.2
-attn_dropout_prob: 0.2
-hidden_act: gelu
-layer_norm_eps: 1e-12
-initializer_range: 0.02
+# official-style DiffuRec parameters
+hidden_size: 128
+dropout: 0.1
+emb_dropout: 0.3
+num_blocks: 4
+attention_heads: 4
+diffusion_steps: 32
+lambda_uncertainty: 0.001
+noise_schedule: trunc_lin
+schedule_sampler_name: lossaware
+rescale_timesteps: True
 
-# 优化器
-learning_rate: 1e-3
-
-# 其他
+# misc
 seed: 1997
 device: cpu
-topk: [10]
-show_progress: True
-
-# 保存路径
+topk: [5, 10, 20]
 checkpoint_dir: saved/

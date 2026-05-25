@@ -14,7 +14,9 @@ from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, g
 
-from recbole.model.sequential_recommender.sasrec import SASRec
+from types import SimpleNamespace
+
+from models.official_diffurec import AttDiffuseModel, DiffuRec
 
 app = Flask(__name__)
 app.secret_key = 'recommend-movie-secret-key-2024'
@@ -32,14 +34,6 @@ movie_info = {}       # movie_id -> {title, genres, ...}
 user_id_map = {}      # internal_user_id -> user_id
 raw_item_to_internal = {}
 base_user_sequences = {}
-
-
-class _SASRecDatasetStub:
-    def __init__(self, item_num):
-        self.item_num = item_num
-
-    def num(self, field):
-        return self.item_num
 
 
 def get_db():
@@ -115,7 +109,7 @@ def init_db():
 
 
 def load_model():
-    """加载训练好的 SASRec checkpoint 和推理依赖"""
+    """加载训练好的 DiffuRec checkpoint 和推理依赖"""
     global recommender_model, item_embeddings, checkpoint_data
     global item_id_map, user_id_map, raw_item_to_internal, base_user_sequences
     try:
@@ -124,15 +118,25 @@ def load_model():
             raise FileNotFoundError(checkpoint_path)
 
         checkpoint_data = torch.load(checkpoint_path, map_location='cpu')
-        checkpoint_data['model_config'].setdefault('NEG_PREFIX', 'neg_')
-        recommender_model = SASRec(
-            checkpoint_data['model_config'],
-            _SASRecDatasetStub(checkpoint_data['item_num']),
+        model_args = SimpleNamespace(
+            hidden_size=int(checkpoint_data['model_config']['hidden_size']),
+            item_num=int(checkpoint_data['item_num'] - 1),
+            emb_dropout=float(checkpoint_data['model_config']['emb_dropout']),
+            dropout=float(checkpoint_data['model_config']['dropout']),
+            max_len=int(checkpoint_data['model_config']['MAX_ITEM_LIST_LENGTH']),
+            diffusion_steps=int(checkpoint_data['model_config']['diffusion_steps']),
+            noise_schedule=checkpoint_data['model_config']['noise_schedule'],
+            rescale_timesteps=bool(checkpoint_data['model_config']['rescale_timesteps']),
+            num_blocks=int(checkpoint_data['model_config']['num_blocks']),
+            attention_heads=int(checkpoint_data['model_config']['attention_heads']),
+            lambda_uncertainty=float(checkpoint_data['model_config']['lambda_uncertainty']),
+            schedule_sampler_name=checkpoint_data['model_config']['schedule_sampler_name'],
         )
+        recommender_model = AttDiffuseModel(DiffuRec(model_args), model_args)
         recommender_model.load_state_dict(checkpoint_data['model_state'])
         recommender_model.eval()
 
-        item_embeddings = recommender_model.item_embedding.weight.detach().cpu().numpy()
+        item_embeddings = recommender_model.item_embeddings.weight.detach().cpu().numpy()
         item_id_map = {
             int(idx): int(raw_id)
             for idx, raw_id in enumerate(checkpoint_data.get('item_internal_to_raw', []))
@@ -159,7 +163,7 @@ def load_model():
         print(f'Model load failed: {e}')
         recommender_model = None
         checkpoint_data = None
-        hidden_size = 64
+        hidden_size = 128
         item_embeddings = np.random.randn(1683, hidden_size).astype(np.float32)
         item_id_map = {}
         user_id_map = {}
@@ -329,11 +333,14 @@ def get_user_embedding(user_id):
 
     max_len = int(checkpoint_data['model_config']['MAX_ITEM_LIST_LENGTH'])
     sequence = sequence[-max_len:]
-    padded = sequence + [0] * (max_len - len(sequence))
+    padded = [0] * (max_len - len(sequence)) + sequence
     seq_tensor = torch.LongTensor([padded])
-    seq_len = torch.LongTensor([len(sequence)])
+    tag_tensor = torch.LongTensor([[0]])
     with torch.no_grad():
-        user_rep = recommender_model.forward(seq_tensor, seq_len).cpu().numpy()[0]
+        _scores, user_rep, _weights, _t, _item_rep_dis, _seq_rep_dis = recommender_model(
+            seq_tensor, tag_tensor, train_flag=False
+        )
+        user_rep = user_rep.cpu().numpy()[0]
     return user_rep, source, len(sequence), sequence
 
 
